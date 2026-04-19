@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>UM Pune Expense Flow</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body style="font-family: Arial; padding: 30px;">
+
+<h2>📱 Login</h2>
+
+<div id="loginSection">
+  <input type="text" id="phone" placeholder="Enter mobile (9876543210)">
+  <br><br>
+  <button onclick="sendOTP()">Send OTP</button>
+
+  <br><br>
+
+  <input type="text" id="otp" placeholder="Enter OTP">
+  <br><br>
+  <button onclick="verifyOTP()">Verify OTP</button>
+</div>
+
+<p id="status"></p>
+
+<div id="recaptcha-container"></div>
+
+<!-- EXPENSE SECTION -->
+<div id="expenseSection" style="display:none; margin-top:40px;">
+  <h2>💸 Submit Expense</h2>
+
+  <input type="number" id="amount" placeholder="Amount (₹)">
+  <br><br>
+
+  <input type="text" id="desc" placeholder="Description">
+  <br><br>
+
+  <input type="date" id="date">
+  <br><br>
+
+  <button onclick="saveExpense()">Submit Expense</button>
+  <br><br>
+  <button onclick="loadExpenses()">View Expenses (Approver)</button>
+  <div id="expenseList"></div>
+
+
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyA36jPkq5rAVPme55llgsZumsvzOPFCQgk",
+  authDomain: "umpunefinance-1ab17.firebaseapp.com",
+  projectId: "umpunefinance-1ab17",
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser = null;
+
+// reCAPTCHA
+window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+  size: 'normal'
+});
+window.recaptchaVerifier.render();
+
+let confirmationResult = null;
+
+function sendOTP() {
+  const phone = document.getElementById('phone').value.trim();
+
+  if (!/^[6-9]\d{9}$/.test(phone)) {
+    document.getElementById('status').innerText = "❌ Enter valid number";
+    return;
+  }
+
+  const fullPhone = "+91" + phone;
+
+  auth.signInWithPhoneNumber(fullPhone, window.recaptchaVerifier)
+    .then(result => {
+      confirmationResult = result;
+      document.getElementById('status').innerText = "✅ OTP Sent";
+    })
+    .catch(err => {
+      document.getElementById('status').innerText = "❌ " + err.message;
+    });
+}
+
+function verifyOTP() {
+  const code = document.getElementById('otp').value;
+
+  if (!confirmationResult) {
+    document.getElementById('status').innerText = "❌ Send OTP first";
+    return;
+  }
+
+  confirmationResult.confirm(code)
+    .then(async (result) => {
+      const user = result.user;
+      currentUser = user;
+
+      const userRef = db.collection('users').doc(user.uid);
+      const doc = await userRef.get();
+
+      if (!doc.exists) {
+        await userRef.set({
+          phone: user.phoneNumber,
+          role: "submitter",
+          createdAt: new Date()
+        });
+      }
+
+      document.getElementById('status').innerText = "🎉 Logged In";
+      document.getElementById('loginSection').style.display = "none";
+      document.getElementById('expenseSection').style.display = "block";
+    })
+    .catch(() => {
+      document.getElementById('status').innerText = "❌ Invalid OTP";
+    });
+}
+
+// SAVE EXPENSE
+function saveExpense() {
+  const amount = document.getElementById('amount').value;
+  const desc = document.getElementById('desc').value;
+  const date = document.getElementById('date').value;
+
+  if (!amount || !desc || !date) {
+    alert("Fill all fields");
+    return;
+  }
+
+  db.collection('expenses').add({
+    amount: Number(amount),
+    description: desc,
+    date: date,
+    userId: currentUser.uid,
+    status: "pending",
+    createdAt: new Date()
+  });
+
+  document.getElementById('status').innerText = "✅ Expense Submitted";
+
+  // clear fields
+  document.getElementById('amount').value = "";
+  document.getElementById('desc').value = "";
+  document.getElementById('date').value = "";
+}
+
+async function approveExpense(id) {
+  const ref = db.collection('expenses').doc(id);
+  const doc = await ref.get();
+
+  if (doc.data().status !== "pending") {
+    alert("Already decided. Cannot change.");
+    return;
+  }
+
+  await ref.update({ status: "approved" });
+  loadExpenses();
+}
+
+async function rejectExpense(id) {
+  const ref = db.collection('expenses').doc(id);
+  const doc = await ref.get();
+
+  if (doc.data().status !== "pending") {
+    alert("Already decided. Cannot change.");
+    return;
+  }
+
+  await ref.update({ status: "rejected" });
+  loadExpenses();
+}
+
+async function loadExpenses() {
+  const listDiv = document.getElementById('expenseList');
+  listDiv.innerHTML = "Loading...";
+
+  const snapshot = await db.collection('expenses')
+    .orderBy('createdAt', 'desc')
+    .get();
+
+  let html = "";
+
+  snapshot.forEach(doc => {
+    const data = doc.data();
+
+    html += `
+      <div style="border:1px solid #ccc; padding:10px; margin:10px;">
+        <b>₹${data.amount}</b> - ${data.description}<br>
+        Status: ${data.status}<br><br>
+        ${
+      data.status === "pending"
+      ? `
+        <button onclick="approveExpense('${doc.id}')">Approve</button>
+        <button onclick="rejectExpense('${doc.id}')">Reject</button>
+      `
+      : `<i>Final decision taken</i>`
+    }
+
+
+      </div>
+    `;
+  });
+
+  listDiv.innerHTML = html || "No expenses found";
+}
+</script>
+
+</body>
+</html>

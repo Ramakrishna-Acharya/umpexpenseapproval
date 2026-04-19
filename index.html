@@ -73,6 +73,7 @@
   <select id="role">
     <option value="submitter">Submitter</option>
     <option value="approver">Approver</option>
+    <option value="readonly">Admin (Read Only)</option>
   </select>
 
   <button onclick="login()">Login</button>
@@ -112,10 +113,10 @@ const db = firebase.firestore();
 // 🔴 USERS (HARDCODED)
 const users = {
   "ram": { password: "ram123", roles: ["submitter", "approver"] },
-  "shridhar": { password: "shridhar123", roles: ["approver"] },
-  "pravin": { password: "pravin123", roles: ["approver"] },
-  "damodar": { password: "damodar123", roles: ["approver"] },
-  "admin.9999999999": { password: "admin123", roles: ["readonly"] }
+  "shridhar": { password: "shridhar123", roles: ["submitter", "approver"] },
+  "pravin": { password: "pravin123", roles: ["submitter", "approver"] },
+  "damodar": { password: "damodar123", roles: ["submitter", "approver"] },
+  "admin": { password: "admin123", roles: ["readonly"] }
 };
 
 let currentUser = "";
@@ -143,7 +144,7 @@ function login() {
     document.getElementById("app").style.display = "block";
 
     // Hide submit if approver
-    if (role === "approver") {
+    if (role !== "submitter") {
       document.getElementById("submitSection").style.display = "none";
     } else {
       document.getElementById("submitSection").style.display = "block";

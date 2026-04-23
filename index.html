@@ -1,248 +1,366 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>UM Pune Expense App</title>
+  <title>UM Pune Expense Flow</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-
   <style>
-    body {
-      font-family: Arial;
-      background: #fff7ed;
-      margin: 0;
-      padding: 0;
+    body { font-family: Arial; background:#f2f4f8; padding:10px; }
+
+    h2 { background:#ff9933; color:white; padding:12px; border-radius:8px; }
+
+    .box {
+      background:white;
+      padding:15px;
+      margin-top:10px;
+      border-radius:10px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.1);
     }
 
-    .container {
-      max-width: 420px;
-      margin: auto;
-      padding: 20px;
-    }
-
-    h2 {
-      color: #e65100;
-      text-align: center;
-    }
-
-    .card {
-      background: white;
-      padding: 15px;
-      border-radius: 10px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-
-    input, select, button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 8px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
+    input, select {
+      width:100%;
+      padding:8px;
+      margin-top:6px;
+      border-radius:6px;
+      border:1px solid #ccc;
     }
 
     button {
-      background: #e65100;
-      color: white;
-      border: none;
-      font-weight: bold;
+      padding:8px;
+      margin-top:10px;
+      width:100%;
+      background:#ff9933;
+      border:none;
+      color:white;
+      border-radius:6px;
+      font-weight:bold;
+      cursor:pointer;
     }
 
-    button:hover {
-      background: #bf360c;
+    .btn-small {
+      width:auto;
+      padding:5px 8px;
+      font-size:11px;
     }
 
-    .status-approved { color: green; }
-    .status-rejected { color: red; }
+    table {
+      width:100%;
+      margin-top:15px;
+      border-collapse:collapse;
+      background:white;
+      font-size:11px;
+    }
+
+    th, td {
+      padding:6px;
+      border:1px solid #ddd;
+      text-align:center;
+      max-width:120px;
+      word-wrap:break-word;
+    }
+
+    .flow { text-align:left; font-size:11px; }
+    .approved { color:green; }
+    .pending { color:orange; }
+
   </style>
 </head>
 
 <body>
 
-<div class="container">
+<h2>UM Pune Expense Flow</h2>
 
-<h2>🛕 UM Pune Expense Flow</h2>
-
-<div class="card">
+<div class="box">
   <h3>Login</h3>
-  <input id="username" placeholder="username (ram)">
-  <input id="password" type="password" placeholder="password">
-
-  <select id="role">
-    <option value="submitter">Submitter</option>
-    <option value="approver">Approver</option>
-    <option value="readonly">Admin (Read Only)</option>
-  </select>
-
+  <input id="username" placeholder="Username">
+  <input id="password" type="password" placeholder="Password">
   <button onclick="login()">Login</button>
   <p id="loginStatus"></p>
 </div>
 
-<div id="app" style="display:none;">
+<div class="box" id="app" style="display:none;">
 
-  <div class="card" id="submitSection">
-    <h3>Submit Expense</h3>
-    <input id="amount" placeholder="Amount">
-    <input id="desc" placeholder="Description">
-    <input id="date" type="date">
-    <button onclick="submitExpense()">Submit Expense</button>
+  <h3 id="welcome"></h3>
+
+  <div id="submitBox">
+    <h4>Submit Expense</h4>
+
+    <input type="date" id="date">
+    <input type="text" id="paidTo" placeholder="Paid To">
+    <input type="number" id="amount" placeholder="Amount">
+    <input type="text" id="paidFor" placeholder="Paid For">
+
+    <select id="paymentType">
+      <option value="">Payment Type</option>
+      <option>Cash</option>
+      <option>UPI</option>
+      <option>Bank Transfer</option>
+    </select>
+
+    <input type="file" id="billImage">
+
+    <button id="submitBtn" onclick="submitExpense()">Submit</button>
+    <p id="status"></p>
   </div>
 
-  <div class="card">
-    <h3>All Expenses</h3>
-    <div id="expenses"></div>
-  </div>
+  <button onclick="exportExcel()">📥 Export</button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Date</th>
+        <th>Paid To</th>
+        <th>Amt</th>
+        <th>By</th>
+        <th>Flow</th>
+        <th>Bill</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
 
 </div>
 
-</div>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
 <script>
-// 🔴 FIREBASE CONFIG (ONLY CHANGE THIS)
 const firebaseConfig = {
-  apiKey: "AIzaSyA36jPkq5rAVPme55llgsZumsvzOPFCQgk",
+  apiKey: "AIzaSy...",
   authDomain: "umpunefinance-1ab17.firebaseapp.com",
-  projectId: "umpunefinance-1ab17"
+  projectId: "umpunefinance-1ab17",
+  storageBucket: "umpunefinance-1ab17.firebasestorage.app"
 };
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const storage = firebase.storage();
 
-// 🔴 USERS (HARDCODED)
+const approvers = ["ram","shridhar","pravin","damodar"];
+
 const users = {
-  "ram": { password: "ram123", roles: ["submitter", "approver"] },
-  "shridhar": { password: "shridhar123", roles: ["submitter", "approver"] },
-  "pravin": { password: "pravin123", roles: ["submitter", "approver"] },
-  "damodar": { password: "damodar123", roles: ["submitter", "approver"] },
+  "ram": { password: "ram123", roles: ["submitter","approver"] },
+  "shridhar": { password: "shridhar123", roles: ["submitter","approver"] },
+  "pravin": { password: "pravin123", roles: ["submitter","approver"] },
+  "damodar": { password: "damodar123", roles: ["submitter","approver"] },
   "admin": { password: "admin123", roles: ["readonly"] }
 };
 
 let currentUser = "";
-let currentRole = "";
+let submitting = false;
 
-// 🔴 LOGIN
+// PREVENT ENTER DOUBLE SUBMIT
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter") e.preventDefault();
+});
+
+// LOGIN
 function login() {
-  const uname = document.getElementById("username").value;
-  const pass = document.getElementById("password").value;
-  const role = document.getElementById("role").value;
+  const u = username.value.trim().toLowerCase();
+  const p = password.value.trim();
 
-  if (users[uname] && users[uname].password === pass) {
-
-    if (!users[uname].roles.includes(role)) {
-      document.getElementById("loginStatus").innerText = "❌ Role not allowed";
-      return;
-    }
-
-    currentUser = uname;
-    currentRole = role;
-
-    document.getElementById("loginStatus").innerText =
-      "✅ Logged in as " + role;
-
-    document.getElementById("app").style.display = "block";
-
-    // Hide submit if approver
-    if (role !== "submitter") {
-      document.getElementById("submitSection").style.display = "none";
-    } else {
-      document.getElementById("submitSection").style.display = "block";
-    }
-
-    loadExpenses();
-
+  if (users[u].roles.includes("readonly")) {
+  submitBox.style.display = "none";
+  status.innerText = "ℹ️ You are a Read-only user. You cannot submit or approve expenses.";
   } else {
-    document.getElementById("loginStatus").innerText = "❌ Invalid login";
+  submitBox.style.display = "block";
+  status.innerText = "";
   }
-}
 
-// 🔴 SUBMIT EXPENSE
-async function submitExpense() {
-  if (currentRole !== "submitter") {
-    alert("Not allowed");
+  if (!users[u] || users[u].password !== p) {
+    loginStatus.innerText = "❌ Invalid login";
     return;
   }
 
-  const amount = document.getElementById("amount").value;
-  const desc = document.getElementById("desc").value;
-  const date = document.getElementById("date").value;
+  currentUser = u;
 
-  await db.collection("expenses").add({
-    amount,
-    desc,
-    date,
-    createdBy: currentUser,
-    approvals: [],
-    status: "pending"
-  });
+  loginStatus.innerText = "✅ Logged in";
+  app.style.display = "block";
+  welcome.innerText = "Welcome " + u;
 
-  alert("Expense Submitted");
   loadExpenses();
 }
 
-// 🔴 LOAD EXPENSES
-async function loadExpenses() {
-  const snapshot = await db.collection("expenses").get();
-  console.log("Total docs:", snapshot.size);
-  const div = document.getElementById("expenses");
-  div.innerHTML = "";
+// SUBMIT
+async function submitExpense() {
 
-  snapshot.forEach(doc => {
-    const e = doc.data();
-
-    let statusClass = "";
-    if (e.status === "approved") statusClass = "status-approved";
-    if (e.status === "rejected") statusClass = "status-rejected";
-
-    let html = `
-      <div style="border-bottom:1px solid #ccc; padding:10px;">
-        ₹${e.amount} - ${e.desc} (${e.date}) <br>
-        By: ${e.createdBy} <br>
-        Status: <b class="${statusClass}">${e.status}</b> <br>
-        Approvals: ${e.approvals.length}/3 <br>
-    `;
-
-    // Only approver & not own expense
-    if (currentRole === "approver" && currentUser !== e.createdBy && e.status === "pending") {
-      html += `
-        <button onclick="approve('${doc.id}')">Approve</button>
-        <button onclick="reject('${doc.id}')">Reject</button>
-      `;
-    }
-
-    html += "</div>";
-    div.innerHTML += html;
-  });
-}
-
-// 🔴 APPROVE
-async function approve(id) {
-  const ref = db.collection("expenses").doc(id);
-  const doc = await ref.get();
-  let data = doc.data();
-
-  if (!data.approvals.includes(currentUser)) {
-    data.approvals.push(currentUser);
+  if (users[currentUser].roles.includes("readonly")) {
+  status.innerText = "❌ Read-only user cannot submit";
+  return;
   }
 
-  let status = data.approvals.length >= 3 ? "approved" : "pending";
+  if (submitting) return;
+  submitting = true;
 
-  await ref.update({
-    approvals: data.approvals,
-    status
+  const d = date.value.trim();
+  const pTo = paidTo.value.trim();
+  const amt = amount.value.trim();
+  const pFor = paidFor.value.trim();
+  const type = paymentType.value;
+
+  if (!d || !pTo || !amt || !pFor || !type) {
+    status.innerText = "❌ All fields mandatory";
+    submitting = false;
+    return;
+  }
+
+  let imageUrl = "";
+  const file = billImage.files[0];
+
+  if (file) {
+  try {
+    status.innerText = "Uploading image...";
+
+    const ref = storage.ref("bills/" + Date.now() + "_" + file.name);
+
+    const snapshot = await ref.put(file);
+
+    imageUrl = await snapshot.ref.getDownloadURL();
+
+    status.innerText = "✅ Image uploaded";
+    console.log("Image URL:", imageUrl);
+
+  } catch (err) {
+    console.error(err);
+    status.innerText = "❌ Upload failed: " + err.message;
+    submitting = false;
+    return;
+  }
+}
+
+  await db.collection("expenses").add({
+    date: d,
+    paidTo: pTo,
+    amount: amt,
+    paidFor: pFor,
+    paymentType: type,
+    createdBy: currentUser,
+    approvals: [],
+    bill: imageUrl,
+    timestamp: Date.now()
   });
+
+  status.innerText = "✅ Expense Saved";
+
+  document.querySelectorAll("input").forEach(i => i.value="");
+  paymentType.value="";
+
+  submitting = false;
 
   loadExpenses();
 }
 
-// 🔴 REJECT
-async function reject(id) {
-  await db.collection("expenses").doc(id).update({
-    status: "rejected"
-  });
+// APPROVE
+async function approve(id) {
+
+  const ref = db.collection("expenses").doc(id);
+  const snap = await ref.get();
+  const data = snap.data();
+
+  let approvals = data.approvals || [];
+
+  if (data.createdBy === currentUser) {
+    alert("Sorry, you cannot approve your own expense");
+    return;
+  }
+
+  if (users[currentUser].roles.includes("readonly")) {
+  alert("You are a read-only user. Approval not allowed.");
+  return;
+  }
+
+  if (approvals.includes(currentUser)) {
+    alert("Already approved");
+    return;
+  }
+
+  approvals.push(currentUser);
+
+  await ref.update({ approvals });
 
   loadExpenses();
+}
+
+// EXPORT
+async function exportExcel() {
+
+  const snap = await db.collection("expenses").get();
+
+  let csv = "Date,Paid To,Amount,By,Status\n";
+
+  snap.forEach(doc=>{
+    const d = doc.data();
+    const totalNeeded = approvers.length - 1;
+    const count = d.approvals.length;
+
+    const status = count === totalNeeded
+      ? "Approved"
+      : `Pending (${count}/${totalNeeded})`;
+
+    csv += `${d.date},${d.paidTo},${d.amount},${d.createdBy},${status}\n`;
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "expenses.csv";
+  a.click();
+}
+
+// LOAD
+async function loadExpenses() {
+
+  tableBody.innerHTML = "";
+
+  const snap = await db.collection("expenses")
+    .orderBy("timestamp","desc")
+    .get();
+
+  let i = 1;
+
+  snap.forEach(doc => {
+
+    const d = doc.data();
+    const approvals = d.approvals || [];
+
+    const totalNeeded = approvers.length - 1;
+
+    let flow = "";
+
+    approvers.forEach(a => {
+      if (a === d.createdBy) return;
+
+      flow += approvals.includes(a)
+        ? `✅ ${a} `
+        : `⏳ ${a} `;
+    });
+
+    const status = approvals.length === totalNeeded
+      ? "Approved"
+      : `Pending (${approvals.length}/${totalNeeded})`;
+
+    const bill = d.bill
+      ? `<a href="${d.bill}" target="_blank">📄</a>`
+      : "-";
+
+    const action = `<button class="btn-small" onclick="approve('${doc.id}')">Approve</button>`;
+
+    tableBody.innerHTML += `
+      <tr>
+        <td>${i++}</td>
+        <td>${d.date}</td>
+        <td>${d.paidTo}</td>
+        <td>${d.amount}</td>
+        <td>${d.createdBy}</td>
+        <td class="flow">${flow}<br><b>${status}</b></td>
+        <td>${bill}</td>
+        <td>${action}</td>
+      </tr>
+    `;
+  });
 }
 </script>
 
